@@ -210,19 +210,7 @@ npm install -g n8n
 
 ---
 
-## 🎨 Screenshots
 
-<div align="center">
-
-| Splash Screen | Task Library | Task Execution |
-|:---:|:---:|:---:|
-| ![Splash](screenshots/splash.png) | ![Library](screenshots/library.png) | ![Execution](screenshots/execution.png) |
-
-| Web Scraper | Results View | Settings |
-|:---:|:---:|:---:|
-| ![Scraper](screenshots/scraper.png) | ![Results](screenshots/results.png) | ![Settings](screenshots/settings.png) |
-
-</div>
 
 ---
 
@@ -317,8 +305,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👨‍💻 Author
 
 **Your Name**
-- GitHub: [@yourusername](https://github.com/masteranany23)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/mishra-anany)
+- GitHub: [@masteranany23](https://github.com/masteranany23)
+- LinkedIn: [Anany Mishra](https://linkedin.com/in/mishra-anany)
 - Email: masteranany23@gmail.com
 ---
 
