@@ -268,33 +268,7 @@ taskit/
 
 ---
 
-## 🤝 Contributing
 
-We welcome contributions! Here's how you can help:
-
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Commit your changes**
-   ```bash
-   git commit -m "Add amazing feature"
-   ```
-4. **Push to the branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-5. **Open a Pull Request**
-
-### Contribution Guidelines
-- Follow Kotlin coding conventions
-- Write clear commit messages
-- Add tests for new features
-- Update documentation as needed
-- Ensure all tests pass before submitting
-
----
 
 ## 📝 License
 
