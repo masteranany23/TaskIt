@@ -317,10 +317,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👨‍💻 Author
 
 **Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
-- Email: your.email@example.com
-
+- GitHub: [@yourusername](https://github.com/masteranany23)
+- LinkedIn: [Your LinkedIn](https://linkedin.com/in/mishra-anany)
+- Email: masteranany23@gmail.com
 ---
 
 ## 🙏 Acknowledgments
@@ -370,18 +369,12 @@ A: Yes, all API calls are encrypted and your data is processed securely through 
 
 ---
 
-## 📞 Support
 
-- **Documentation**: [Wiki](https://github.com/yourusername/taskit/wiki)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/taskit/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/taskit/discussions)
-
----
 
 <div align="center">
 
 **⭐ If you find TaskIt helpful, please star this repository! ⭐**
 
-Made with ❤️ and ☕ by [Your Name]
+Made with ❤️ and ☕ by Anany Mishra
 
 </div>
