@@ -1,0 +1,161 @@
+{
+  "name": "email-task",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-task",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1140,
+        260
+      ],
+      "id": "0e609747-c5e8-40b1-821e-197d92a7b9ac",
+      "name": "Email Webhook",
+      "webhookId": "36699958-dbfe-40e7-9999-4239aaf9229e"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "provider-2/gpt-3.5-turbo",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a professional email writing assistant. Create well-structured, professional emails based on user requests. Always return ONLY a valid JSON object with 'subject' and 'body' fields. Example: {\"subject\": \"Meeting Request\", \"body\": \"Dear Recipient,\\n\\nContent here...\\n\\nBest regards,\\nSender\"}",
+              "role": "system"
+            },
+            {
+              "content": "=Create a professional email with the following details:\n- To: {{ $json.body.recipientEmail }}\n- Content:{{ $json.body.content }}\n- Tone: {{ $json.body.tone || 'professional' }}\n- From: {{ $json.body.senderName || 'User' }}\n\nReturn only a JSON object with 'subject' and 'body' fields."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -660,
+        260
+      ],
+      "id": "37f96268-6b29-4454-b390-3822ca6c3a16",
+      "name": "Generate Email",
+      "credentials": {
+        "openAiApi": {
+          "id": "cmQfBRg5bUSDndxS",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process the AI response and format for Android app\nconst webhookData = $('Email Webhook').first().json;\nconst aiResponse = $input.first().json;\n\nlet emailData;\ntry {\n  // Get AI response content\n  const content = aiResponse.message?.content || aiResponse.text || aiResponse.content || '';\n  \n  // Try to parse as JSON\n  try {\n    emailData = JSON.parse(content.trim());\n  } catch {\n    // Fallback parsing if not JSON\n    const lines = content.split('\\n').filter(line => line.trim());\n    const subject = lines[0]?.replace(/.*subject[:\\s]*/i, '') || 'Email';\n    const body = lines.slice(1).join('\\n') || webhookData.body?.content || webhookData.content || 'Email content';\n    emailData = { subject, body };\n  }\n  \n  const executionId = 'email_' + Date.now();\n  \n  // Return response in the exact format expected by Android app\n  return {\n    id: executionId,\n    status: 'success',\n    data: {\n      id: executionId,\n      status: 'sent',\n      recipient: webhookData.body?.recipientEmail || webhookData.recipientEmail,\n      subject: emailData.subject?.replace(/[\"']/g, '') || 'Email',\n      body: emailData.body?.replace(/\\\\n/g, '\\n') || webhookData.body?.content || webhookData.content,\n      timestamp: new Date().toISOString(),\n      senderName: webhookData.body?.senderName || webhookData.senderName || 'User',\n      tone: webhookData.body?.tone || webhookData.tone || 'professional',\n      message: 'Email sent successfully',\n      messageId: 'gmail_' + Date.now()\n    }\n  };\n  \n} catch (error) {\n  // Return error response in expected format\n  const executionId = 'email_error_' + Date.now();\n  \n  return {\n    id: executionId,\n    status: 'error',\n    error: 'Failed to generate email: ' + error.message,\n    data: {\n      recipient: webhookData.body?.recipientEmail || webhookData.recipientEmail,\n      originalContent: webhookData.body?.content || webhookData.content,\n      timestamp: new Date().toISOString()\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        400
+      ],
+      "id": "3dbb53d4-7697-4d44-a6eb-737ae7a74606",
+      "name": "Process Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        20,
+        200
+      ],
+      "id": "bdcda968-e8d9-4468-9f1c-3e5a8c5ef4a9",
+      "name": "Send Response"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Email Webhook').item.json.body.recipientEmail }}",
+        "subject": "={{ $json.message.content.parseJson().subject }}",
+        "message": "={{ $json.message.content.parseJson().body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0e2afa45-46d6-4ad6-8a2a-c563806f431a",
+      "name": "Send a message",
+      "webhookId": "af9fd3e4-9daa-4c2e-bd7c-afb4c32068cf",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PnNkbMhOvBRFBWSj",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Email Webhook": {
+      "main": [
+        [
+          {
+            "node": "Generate Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Email": {
+      "main": [
+        [
+          {
+            "node": "Process Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5fa223b2-68d1-49c3-8b96-3a113d310cb0",
+  "meta": {
+    "instanceId": "bfbae3991e82b207d766bd1deead841e63b08f4dc3f0cf4fcbedd3beec1a2a05"
+  },
+  "id": "QRlnf6DeoK9zGD4l",
+  "tags": []
+}

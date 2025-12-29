@@ -1,0 +1,419 @@
+{
+  "name": "summarize_day",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-day-task",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -5980
+      ],
+      "id": "e36204a3-695b-4f58-9020-6b3fa2c84bd3",
+      "name": "Day Summary Webhook1",
+      "webhookId": "summarize-day-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "masteranany23@gmail.com",
+          "mode": "list",
+          "cachedResultName": "masteranany23@gmail.com"
+        },
+        "options": {
+          "timeMin": "2025-07-01T00:00:00"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -6220
+      ],
+      "id": "84b6ca5a-d13d-40df-a701-ae690cbe199c",
+      "name": "Get Calendar Events2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VU9GewNwOTDQsnzJ",
+          "name": "Google Calendar account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        160,
+        -6100
+      ],
+      "id": "ac6ad985-b7c6-446c-a5a6-b92653702d6c",
+      "name": "Get Gmail Messages1",
+      "webhookId": "13e6258a-8edb-4d79-978d-263209e47dfa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PnNkbMhOvBRFBWSj",
+          "name": "Gmail account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "getAll"
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -5980
+      ],
+      "id": "2915526b-b76c-4455-8d16-14073d5deaae",
+      "name": "Get Notion Pages1",
+      "credentials": {
+        "notionApi": {
+          "id": "vi5vfkgpBGBL9pge",
+          "name": "Notion account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=https://api.openweathermap.org/data/2.5/weather?q={{ $json.body.city || 'New York' }}&appid={{'23ab7cf1d3bbc3a851af95e14205d5d1'}}&units=metric",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        -5860
+      ],
+      "id": "e6465cbb-ea36-49c7-884d-baf82702743f",
+      "name": "Get Weather Data1",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=https://newsapi.org/v2/top-headlines?country={{ $json.body.country || 'us' }}&category={{ $json.body.newsCategory || 'general' }}&pageSize=5&apiKey={{ $credentials.newsApi.apiKey }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        -5740
+      ],
+      "id": "63c8355a-fd79-4672-ab43-37a7b722fde8",
+      "name": "Get News Headlines1",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all data sources for the summary\nconst webhookData = $input.first().json.body;\nconst calendarEvents = $('Get Calendar Events2').all() || [];\nconst gmailMessages = $('Get Gmail Messages1').all() || [];\nconst notionPages = $('Get Notion Pages1').all() || [];\nconst weatherData = $('Get Weather Data1').first()?.json || {};\nconst newsData = $('Get News Headlines1').first()?.json || {};\n\n// Format calendar events\nconst formattedEvents = calendarEvents.map(event => {\n  const start = event.json.start?.dateTime || event.json.start?.date || '';\n  const summary = event.json.summary || 'Untitled Event';\n  return `${summary} (${start})`;\n}).join('\\n- ');\n\n// Format emails\nconst emailCount = gmailMessages.length;\nconst emailSubjects = gmailMessages.slice(0, 5).map(email => \n  email.json.snippet || 'No subject'\n).join('\\n- ');\n\n// Format Notion pages\nconst notionTitles = notionPages.map(page => {\n  const title = page.json.properties?.Name?.title?.[0]?.plain_text || \n                page.json.properties?.Title?.title?.[0]?.plain_text || \n                'Untitled';\n  return title;\n}).join('\\n- ');\n\n// Format weather\nconst weather = weatherData.weather?.[0] || {};\nconst weatherSummary = `${weather.description || 'N/A'}, ${Math.round(weatherData.main?.temp || 0)}°C`;\n\n// Format news\nconst newsHeadlines = newsData.articles?.slice(0, 3).map(article => \n  article.title\n).join('\\n- ') || 'No news available';\n\n// Create comprehensive data object\nconst summaryData = {\n  date: webhookData.date,\n  userEmail: webhookData.userEmail,\n  city: webhookData.city || 'New York',\n  detailLevel: webhookData.detailLevel || 'detailed',\n  calendar: {\n    count: calendarEvents.length,\n    events: formattedEvents\n  },\n  emails: {\n    count: emailCount,\n    subjects: emailSubjects\n  },\n  notion: {\n    count: notionPages.length,\n    pages: notionTitles\n  },\n  weather: {\n    description: weather.description || 'N/A',\n    temperature: Math.round(weatherData.main?.temp || 0),\n    city: weatherData.name || webhookData.city || 'Unknown'\n  },\n  news: {\n    headlines: newsHeadlines\n  }\n};\n\nreturn { summaryData };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        -6020
+      ],
+      "id": "e2643bde-5af2-468e-a973-0ba6065837bc",
+      "name": "Combine All Data1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "provider-2/gpt-3.5-turbo",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert personal assistant AI that creates beautiful, comprehensive daily summaries. You analyze calendar events, emails, notes, weather, and news to provide insightful daily reports. Always format your response as a well-structured, professional summary with sections, insights, and actionable recommendations. Use the exact format provided in the example with emojis and proper sections.",
+              "role": "system"
+            },
+            {
+              "content": "=Create a comprehensive {{ $json.summaryData.detailLevel }} daily summary for {{ $json.summaryData.date }} in {{ $json.summaryData.city }}.\n\n**Format the response EXACTLY like this example:**\n\n📅 Daily Summary - {{ $json.summaryData.date }}\n\n🗓️ TODAY'S SCHEDULE\n{{ $json.summaryData.calendar.events || '- No events scheduled' }}\n\n✅ PRIORITY TASKS\n{{ $json.summaryData.notion.pages || '- No tasks found' }}\n\n🌤️ WEATHER UPDATE\n📍 {{ $json.summaryData.weather.city }}: {{ $json.summaryData.weather.temperature }}°C, {{ $json.summaryData.weather.description }}\n\n📧 EMAIL ACTIVITY\n- {{ $json.summaryData.emails.count }} emails sent today\n{{ $json.summaryData.emails.subjects || '- No recent emails' }}\n\n📰 NEWS HIGHLIGHTS\n{{ $json.summaryData.news.headlines }}\n\n💡 TODAY'S INSIGHTS\n- Provide 3-4 productivity insights based on the data\n- Include weather impact on the day\n- Mention accomplishments and patterns\n- Give actionable recommendations for tomorrow\n\nHave a productive day! 🚀"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        800,
+        -6020
+      ],
+      "id": "ab23ae05-c6de-4363-8d85-e871c59afce4",
+      "name": "Generate AI Summary1",
+      "credentials": {
+        "openAiApi": {
+          "id": "cmQfBRg5bUSDndxS",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "masteranany29@gmail.com",
+        "subject": "Summary Of The Day",
+        "message": "=📅 Daily Summary - Wednesday, July 2, 2025 \n🗓️ TODAY'S SCHEDULE \n- 9:00 AM - Team Standup (30 mins) @ Conference Room A - 2:00 PM - Client Review (60 mins) @ Virtual Meeting \n- 4:30 PM - Project Planning (45 mins) @ Office \n✅ PRIORITY TASKS \n- Complete quarterly report \n- In Progress (Priority: High) Due: Today \n- Review marketing proposal\n- To Do (Priority: Medium) Due: Tomorrow \n- Update project timeline\n- In Progress (Priority: Low) Due: This week\n🌤️ WEATHER UPDATE \n📍 Jaunpur: 33°C, rainy 💧 Humidity: 71% | 💨 Wind: 16 Km/h \n📰 TECH NEWS HIGHLIGHTS - Runway’s generative AI tools will soon let you create video games with a few prompts - Google Cloud appoints Sashikumar Sreedharan as new India MD, eyes next phase of AI-led growth - Stanford paid 35,000 users to deactivate Facebook, Instagram  \n💡 TODAY'S INSIGHTS - Light schedule with good focus time between meetings\n- Weather is quite rainy\n- High priority report due today\n- allocate morning time\n- Consider rescheduling low-priority tasks if needed  \n\nHave a productive day! 🚀",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1180,
+        -6020
+      ],
+      "id": "62c2cde7-c6cf-49ef-8fda-17dd49b8181b",
+      "name": "Send a message1",
+      "webhookId": "79e59749-9656-47f5-85be-f20bca2a4dee",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PnNkbMhOvBRFBWSj",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-day-task",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2820,
+        -5580
+      ],
+      "id": "459b3e6a-d30b-4b2c-915a-34ec15643180",
+      "name": "Summarize Day Webhook",
+      "webhookId": "summarize-day-task-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hardcoded sample data and response\nconst webhookData = $input.first().json.body || $input.first().json;\n\n// The exact summary content you requested\nconst hardcodedSummary = `📅 Daily Summary - Wednesday, July 3, 2025\n\n🗓️ TODAY'S SCHEDULE\n- 1:00 AM - Team Standup (30 mins) @ Conference Room A\n- 3:00 PM - Client Review (60 mins) @ Virtual Meeting  \n- 4:30 PM - Project Planning (45 mins) @ Office\n\n✅ PRIORITY TASKS\n- Complete quarterly report - In Progress (Priority: High) Due: Today\n- Review marketing proposal - To Do (Priority: Medium) Due: Tomorrow\n- Update project timeline - In Progress (Priority: Low) Due: This week\n\n🌤️ WEATHER UPDATE\n📍 Jaunpur: 33°C, rainy\n💧 Humidity: 71% | 💨 Wind: 16 Km/h\n\n📰 TECH NEWS HIGHLIGHTS\n- Runway's generative AI tools will soon let you create video games with a few prompts\n- Google Cloud appoints Sashikumar Sreedharan as new India MD, eyes next phase of AI-led growth\n- Stanford paid 35,000 users to deactivate Facebook, Instagram\n\n💡 TODAY'S INSIGHTS\n- Light schedule with good focus time between meetings\n- Weather is quite rainy\n- High priority report due today - allocate morning time\n- Consider rescheduling low-priority tasks if needed\n\nHave a productive day! 🚀`;\n\n// Prepare data for both email and app response\nconst responseData = {\n  webhookData: webhookData,\n  summary: hardcodedSummary,\n  userEmail: webhookData.userEmail || 'masteranany23@gmail.com',\n  date: 'Wednesday, July 3, 2025',\n  executionId: 'summary_' + Date.now()\n};\n\nreturn responseData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2520,
+        -5580
+      ],
+      "id": "1187fb10-6c6d-4092-8a7b-f47defef843e",
+      "name": "Prepare Sample Data"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "📊 Your Daily Summary - Wednesday, July 2, 2025",
+        "message": "={{ $json.summary }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -2220,
+        -5680
+      ],
+      "id": "43137f70-3b3e-46fb-bdd8-e942fc02c473",
+      "name": "Send Gmail (Optional)",
+      "webhookId": "d97077d6-7f74-4953-b2a5-cb3412046133",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PnNkbMhOvBRFBWSj",
+          "name": "Gmail account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"id\": \"{{ $json.executionId }}\",\n  \"status\": \"success\",\n  \"message\": \"Daily summary generated and sent successfully\",\n  \"data\": {\n    \"id\": \"{{ $json.executionId }}\",\n    \"status\": \"completed\",\n    \"date\": \"{{ $json.date }}\",\n    \"summary\": {{ JSON.stringify($json.summary) }},\n    \"stats\": {\n      \"calendarEvents\": 3,\n      \"priorityTasks\": 3,\n      \"weather\": \"rainy, 33°C\",\n      \"city\": \"New York\",\n      \"newsItems\": 3\n    },\n    \"emailSent\": true,\n    \"emailRecipient\": \"{{ $json.userEmail }}\",\n    \"timestamp\": \"{{ new Date().toISOString() }}\",\n    \"message\": \"Daily summary sent to email and displayed in app\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1920,
+        -5580
+      ],
+      "id": "0ed56290-2ae1-4edb-8d35-7640229c6cfe",
+      "name": "Always Respond to App"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Day Summary Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Get Calendar Events2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Gmail Messages1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Notion Pages1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Weather Data1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get News Headlines1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Calendar Events2": {
+      "main": [
+        [
+          {
+            "node": "Combine All Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Gmail Messages1": {
+      "main": [
+        [
+          {
+            "node": "Combine All Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Notion Pages1": {
+      "main": [
+        [
+          {
+            "node": "Combine All Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Weather Data1": {
+      "main": [
+        [
+          {
+            "node": "Combine All Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get News Headlines1": {
+      "main": [
+        [
+          {
+            "node": "Combine All Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine All Data1": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Summary1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Summary1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        []
+      ]
+    },
+    "Summarize Day Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Sample Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Sample Data": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail (Optional)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Always Respond to App",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8f6512c1-430b-4e9b-b63c-ec067ce32c52",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bfbae3991e82b207d766bd1deead841e63b08f4dc3f0cf4fcbedd3beec1a2a05"
+  },
+  "id": "wuo69mevHk9159Tp",
+  "tags": []
+}

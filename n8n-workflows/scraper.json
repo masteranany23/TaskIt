@@ -1,0 +1,269 @@
+{
+  "name": "scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "web-scraper",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1160,
+        160
+      ],
+      "id": "52aa00f2-28a1-4c4d-b400-72b3b91b349b",
+      "name": "Web Scraper Webhook",
+      "webhookId": "web-scraper-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate URL from app\nconst webhookData = $input.first().json.body || $input.first().json;\n\n// Extract parameters\nconst scrapeParams = {\n  url: webhookData.url || '',\n  jobName: webhookData.jobName || 'Web Scrape Job',\n  category: webhookData.category || 'general',\n  extractionType: webhookData.extractionType || 'general',\n  timestamp: new Date().toISOString(),\n  executionId: 'scrape_' + Date.now()\n};\n\n// Validate URL\nif (!scrapeParams.url) {\n  throw new Error('URL is required');\n}\n\n// Validate URL format\nconst urlRegex = /^(https?:\\/\\/)([\\w.-]+)(:[0-9]+)?(\\/.*)?$/;\nif (!urlRegex.test(scrapeParams.url)) {\n  throw new Error('Please provide a valid URL');\n}\n\n// Clean URL\nconst cleanUrl = scrapeParams.url.trim();\n\nreturn {\n  ...scrapeParams,\n  url: cleanUrl,\n  originalRequest: webhookData\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        160
+      ],
+      "id": "755a5fda-feaf-49ca-b46f-e6f53263d2d4",
+      "name": "Validate URL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v1/scrape",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n\n  \"formats\": [\n    \"markdown\",\n    \"html\"\n  ],\n  \"onlyMainContent\": true,\n  \"includeTags\": [\"title\", \"meta\", \"h1\", \"h2\", \"h3\", \"p\", \"article\", \"div\"],\n  \"excludeTags\": [\"nav\", \"footer\", \"aside\", \"script\", \"style\"]\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -600,
+        160
+      ],
+      "id": "dc4a6b2a-6a62-451b-bf47-1648943d6926",
+      "name": "Scrape Content",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aECtwbdTWNg788jw",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process scraped content and prepare for AI analysis\nconst item = $input.first().json; // Combined data from both nodes\n\n// Extract data from Firecrawl response\nlet scrapedContent = '';\nlet title = 'Scraped Content';\nlet success = false;\n\nif (item.data) {\n  scrapedContent = item.data.markdown || item.data.html || '';\n  title = item.data.metadata?.title || item.jobName;\n  success = true;\n} else if (item.markdown) {\n  scrapedContent = item.markdown;\n  success = true;\n} else if (item.html) {\n  scrapedContent = item.html;\n  success = true;\n}\n\nif (!success || !scrapedContent) {\n  throw new Error('Failed to scrape content from the provided URL');\n}\n\n// Create AI prompt based on extraction type\nlet systemPrompt = '';\nlet userPrompt = '';\n\nswitch (item.extractionType) {\n  case 'news':\n    systemPrompt = 'You are an expert news data extractor. Extract specific actionable information, not just summaries. Focus on concrete details, quotes, statistics, names, dates, and structured data.';\n    userPrompt = `Extract comprehensive structured data from this news content:\\n\\n${scrapedContent}\\n\\nReturn detailed JSON with:\\n1. **headline**: Main story headline\\n2. **summary**: Brief 2-3 sentence summary\\n3. **keyFacts**: Array of specific facts with numbers/statistics\\n4. **people**: Array of {name, role, quotes} for all mentioned people\\n5. **organizations**: Array of {name, type, involvement} for all entities\\n6. **dates**: Array of all mentioned dates and events\\n7. **locations**: Array of all mentioned places\\n8. **quotes**: Array of direct quotes with attribution\\n9. **numbers**: Array of all statistics, percentages, amounts mentioned\\n10. **sources**: Any sources or references mentioned\\n11. **contacts**: Any email addresses, phone numbers, websites found\\n12. **tags**: Relevant topic tags\\n\\nFormat as clean JSON. Extract ALL specific details, not summaries.`;\n    break;\n    \n  case 'product':\n    systemPrompt = 'You are an expert e-commerce data extractor. Extract ALL product details, specifications, prices, and actionable information. Focus on concrete data that can be used for comparison or decision-making.';\n    userPrompt = `Extract comprehensive product data from this e-commerce content:\\n\\n${scrapedContent}\\n\\nReturn detailed JSON with:\\n1. **products**: Array of all products found, each with:\\n   - name: Product name\\n   - price: Current price and currency\\n   - originalPrice: Original price if discounted\\n   - discount: Discount percentage/amount\\n   - specifications: Object with all specs (size, color, material, etc.)\\n   - features: Array of key features\\n   - availability: Stock status\\n   - rating: Rating and review count\\n   - images: Array of image URLs if found\\n   - sku: Product SKU/ID if available\\n   - category: Product category\\n   - brand: Brand name\\n2. **contacts**: Any customer service emails, phone numbers\\n3. **shipping**: Shipping information, costs, delivery times\\n4. **policies**: Return, warranty, refund policies\\n5. **promotions**: Current offers, coupon codes, sales\\n6. **socialMedia**: Social media links found\\n7. **businessInfo**: Company name, address, registration details\\n8. **paymentMethods**: Accepted payment options\\n\\nExtract ALL products individually with complete details. Focus on actionable shopping data.`;\n    break;\n    \n  case 'research':\n    systemPrompt = 'You are an expert research data extractor. Extract specific data points, methodologies, results, citations, and actionable insights. Focus on concrete findings and references.';\n    userPrompt = `Extract comprehensive research data from this content:\\n\\n${scrapedContent}\\n\\nReturn detailed JSON with:\\n1. **title**: Research title or main topic\\n2. **authors**: Array of author names and affiliations\\n3. **abstract**: Research abstract/summary\\n4. **methodology**: Detailed research methods used\\n5. **results**: Specific findings, numbers, percentages\\n6. **datasets**: Any datasets or data sources mentioned\\n7. **statistics**: All statistical data, p-values, confidence intervals\\n8. **citations**: Array of referenced papers/sources\\n9. **keywords**: Research keywords and terms\\n10. **institutions**: Universities, organizations involved\\n11. **funding**: Funding sources if mentioned\\n12. **contacts**: Author emails, institutional contacts\\n13. **links**: URLs to papers, datasets, supplementary materials\\n14. **conclusions**: Key takeaways and implications\\n15. **limitations**: Study limitations mentioned\\n16. **futureWork**: Suggested future research directions\\n\\nExtract ALL specific data points, not general summaries.`;\n    break;\n    \n  default:\n    systemPrompt = 'You are an expert web data extractor. Extract ALL specific, actionable information from web content. Focus on concrete details: contact information, lists, specifications, prices, names, dates, links, and structured data that users can act upon.';\n    userPrompt = `Extract comprehensive structured data from this web content:\\n\\n${scrapedContent}\\n\\nReturn detailed JSON with:\\n1. **title**: Page title\\n2. **summary**: Brief content overview (2-3 sentences max)\\n3. **contacts**: Object with:\\n   - emails: Array of all email addresses found\\n   - phones: Array of all phone numbers found\\n   - addresses: Array of physical addresses\\n   - socialMedia: Object with platform names and URLs\\n   - websites: Array of all URLs/links found\\n4. **businessInfo**: Object with:\\n   - companyName: Business name if identified\\n   - industry: Business type/industry\\n   - services: Array of services offered\\n   - location: Business location/address\\n   - hours: Operating hours if mentioned\\n5. **products**: Array of any products/services with:\\n   - name: Product/service name\\n   - description: Brief description\\n   - price: Price if mentioned\\n   - specifications: Any specs or details\\n6. **people**: Array of people mentioned with:\\n   - name: Person's name\\n   - role: Their role/title\\n   - contact: Their contact info if available\\n7. **events**: Array of events/dates mentioned\\n8. **locations**: Array of all places/locations mentioned\\n9. **numbers**: Array of important numbers (prices, statistics, quantities)\\n10. **lists**: Any structured lists found (features, benefits, steps, etc.)\\n11. **forms**: Any forms or input fields found\\n12. **downloads**: Links to downloadable files (PDFs, docs, etc.)\\n13. **media**: Images, videos, or media content mentioned\\n14. **categories**: Content categories or topics\\n15. **actionableItems**: Specific next steps or actions users can take\\n\\nPrioritize extracting SPECIFIC, ACTIONABLE data that users can directly use. Avoid generic summaries.`;\n}\n\nreturn {\n  url: item.url,\n  jobName: item.jobName,\n  category: item.category,\n  extractionType: item.extractionType,\n  executionId: item.executionId,\n  timestamp: item.timestamp,\n  title: title,\n  rawContent: scrapedContent,\n  systemPrompt: systemPrompt,\n  userPrompt: userPrompt,\n  contentLength: scrapedContent.length\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        160
+      ],
+      "id": "6b4072cf-adb3-4a59-8a10-0abec8ccb9e6",
+      "name": "Process Content"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "provider-5/gpt-4.1-nano",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.systemPrompt }}",
+              "role": "system"
+            },
+            {
+              "content": "={{ $json.userPrompt }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "maxTokens": 20000,
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -120,
+        160
+      ],
+      "id": "8954a89d-cd4e-4943-b5fe-16bb95c031d9",
+      "name": "Analyze Content",
+      "credentials": {
+        "openAiApi": {
+          "id": "cmQfBRg5bUSDndxS",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare final response with processed data\nconst item = $input.first();\nconst aiResponse = item.json; // AI response from Analyze Content\n\n// Extract AI analysis\nlet analysis = {};\ntry {\n  if (aiResponse && aiResponse.message && aiResponse.message.content) {\n    const content = aiResponse.message.content;\n    \n    // Extract JSON from code block if present\n    const jsonMatch = content.match(/```json\\n([\\s\\S]*?)\\n```/);\n    const jsonString = jsonMatch ? jsonMatch[1] : content;\n    \n    analysis = JSON.parse(jsonString);\n  } else {\n    throw new Error('Invalid AI response structure');\n  }\n} catch (e) {\n  analysis = {\n    error: `Analysis parsing failed: ${e.message}`,\n    rawResponse: aiResponse\n  };\n}\n\n// Create final response using context from the workflow\nconst finalResponse = {\n  id: item.executionId || `scrape_${Date.now()}`,\n  status: 'success',\n  data: {\n    executionId: item.executionId || `scrape_${Date.now()}`,\n    status: 'completed',\n    job: {\n      name: item.jobName || 'Web Scrape Job',\n      url: item.url || '',\n      category: item.category || 'general',\n      extractionType: item.extractionType || 'general'\n    },\n    content: {\n      title: analysis.title || item.title || 'Scraped Content',\n      processedData: analysis,\n      rawContentLength: item.contentLength || 0,\n      processedAt: new Date().toISOString()\n    },\n    metadata: {\n      timestamp: item.timestamp || new Date().toISOString(),\n      contentType: item.extractionType || 'general',\n      success: !analysis.error\n    }\n  }\n};\n\nreturn finalResponse;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        160
+      ],
+      "id": "b0eebec2-abf0-4786-9166-3f51d4ad6b1d",
+      "name": "Prepare Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($node[\"Prepare Response\"].json) }}\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        720,
+        160
+      ],
+      "id": "213ef0a9-856f-4ce0-8621-6552ee8531ee",
+      "name": "Respond Success"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "https://docs.google.com/document/d/1rFQm0jHX8r581F8d53JlkIDcEHykrXgU0x6Nr6W3GUI/edit?usp=sharing",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        480,
+        160
+      ],
+      "id": "1bc393e5-b6ce-4ed2-9eca-5f61b5db1352",
+      "name": "Create Google Doc1",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "36DXiyFgXmj5IvFY",
+          "name": "Google Docs account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Web Scraper Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate URL": {
+      "main": [
+        [
+          {
+            "node": "Scrape Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Content": {
+      "main": [
+        [
+          {
+            "node": "Process Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Content": {
+      "main": [
+        [
+          {
+            "node": "Analyze Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Content": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response": {
+      "main": [
+        [
+          {
+            "node": "Create Google Doc1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Doc1": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "01cfb99b-76db-439c-8c1d-6996953ae4d7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bfbae3991e82b207d766bd1deead841e63b08f4dc3f0cf4fcbedd3beec1a2a05"
+  },
+  "id": "WnadIbSNsP4w1pB8",
+  "tags": []
+}

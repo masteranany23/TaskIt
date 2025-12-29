@@ -1,0 +1,226 @@
+{
+  "name": "report",
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "provider-2/gpt-3.5-turbo",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a professional business analyst and report writer. Create comprehensive, well-structured business reports with clear sections, actionable insights, and professional formatting. Use markdown formatting for headings and structure.\n",
+              "role": "system"
+            },
+            {
+              "content": "={{ $json.openAIPrompt }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -760,
+        140
+      ],
+      "id": "97404c7e-2d97-4c9c-9d0e-2100335f4634",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "cmQfBRg5bUSDndxS",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "report-task",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        160
+      ],
+      "id": "8a0fd822-dc6f-4f77-8990-c24f166b4533",
+      "name": "Report Task Webhook1",
+      "webhookId": "report-task-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate report parameters from app\nconst webhookData = $input.first().json.body || $input.first().json;\n\n// Extract report parameters\nconst reportParams = {\n  title: webhookData.title || 'Untitled Report',\n  dataSource: webhookData.dataSource || '',\n  reportType: webhookData.reportType || 'analysis',\n  includeCharts: webhookData.includeCharts !== false, // default true\n  format: webhookData.format || 'pdf',\n  timestamp: new Date().toISOString(),\n  executionId: 'report_' + Date.now()\n};\n\n// Validate required fields\nif (!reportParams.dataSource || reportParams.dataSource.length < 20) {\n  throw new Error('Data source is required and must be at least 20 characters');\n}\n\n// Create comprehensive prompt for OpenAI\nlet openAIPrompt = `Create a comprehensive ${reportParams.reportType} report with the following specifications:\n\nTitle: ${reportParams.title}\nReport Type: ${reportParams.reportType}\nInclude Charts: ${reportParams.includeCharts ? 'Yes' : 'No'}\nOutput Format: ${reportParams.format}\n\nDATA SOURCE:\n${reportParams.dataSource}\n\nPLEASE CREATE A PROFESSIONAL REPORT WITH:\n\n1. EXECUTIVE SUMMARY\n   - Key findings and recommendations\n   - Critical insights overview\n\n2. DETAILED ANALYSIS\n   - Data breakdown and interpretation\n   - Trends and patterns identification\n   - Statistical insights where applicable\n\n3. FINDINGS & INSIGHTS\n   - Main discoveries from the data\n   - Comparative analysis if relevant\n   - Performance metrics and KPIs\n\n4. RECOMMENDATIONS\n   - Actionable next steps\n   - Strategic recommendations\n   - Risk mitigation strategies\n\n5. CONCLUSION\n   - Summary of key points\n   - Future outlook\n   - Implementation timeline\n\n${reportParams.includeCharts ? '\\n6. CHARTS & VISUALIZATIONS\\n   - Describe recommended charts/graphs\\n   - Data visualization suggestions\\n   - Key metrics to highlight visually' : ''}\n\nPlease format the report professionally with clear headings, bullet points, and structured content. Make it comprehensive yet readable.`;\n\nreturn {\n  ...reportParams,\n  openAIPrompt: openAIPrompt,\n  originalRequest: webhookData\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1020,
+        160
+      ],
+      "id": "a20b3179-138b-4e39-8d49-ce6368c856e5",
+      "name": "Prepare Report Data1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract OpenAI response and prepare for Google Docs\nconst data = $input.first().json;\n\n// Debug: Log the incoming data structure\nconsole.log('Incoming data structure:', JSON.stringify(data, null, 2));\n\n// Initialize variables\nlet reportContent = 'Report generation failed';\nlet title = 'Business Report';\nlet reportType = 'Analysis';\nlet executionId = 'report_' + Date.now();\nlet timestamp = new Date().toISOString();\n\n// Try to extract the OpenAI response content\n// Check multiple possible response formats from the OpenAI node\nif (data.text) {\n    // Direct text response\n    reportContent = data.text;\n} else if (data.content) {\n    // Content field\n    reportContent = data.content;\n} else if (data.choices && Array.isArray(data.choices) && data.choices[0]) {\n    // Standard OpenAI API response format\n    if (data.choices[0].message && data.choices[0].message.content) {\n        reportContent = data.choices[0].message.content;\n    } else if (data.choices[0].text) {\n        reportContent = data.choices[0].text;\n    }\n} else if (Array.isArray(data) && data.length > 0) {\n    // Array format response\n    if (data[0].message && data[0].message.content) {\n        reportContent = data[0].message.content;\n    } else if (data[0].text) {\n        reportContent = data[0].text;\n    } else if (data[0].content) {\n        reportContent = data[0].content;\n    }\n} else if (data.message && data.message.content) {\n    // Direct message format\n    reportContent = data.message.content;\n}\n\n// Try to get metadata from the previous nodes\n// Look for data from the \"Prepare Report Data\" node\nconst allInputs = $input.all();\nlet reportMetadata = {};\n\n// Check if we have access to the original report parameters\nallInputs.forEach(input => {\n    const inputData = input.json;\n    if (inputData.title) reportMetadata.title = inputData.title;\n    if (inputData.reportType) reportMetadata.reportType = inputData.reportType;\n    if (inputData.executionId) reportMetadata.executionId = inputData.executionId;\n    if (inputData.timestamp) reportMetadata.timestamp = inputData.timestamp;\n});\n\n// Use metadata if available\ntitle = reportMetadata.title || data.title || 'Business Report';\nreportType = reportMetadata.reportType || data.reportType || 'Analysis';\nexecutionId = reportMetadata.executionId || data.executionId || 'report_' + Date.now();\ntimestamp = reportMetadata.timestamp || data.timestamp || new Date().toISOString();\n\n// Validate that we got content\nif (reportContent === 'Report generation failed') {\n    console.error('Failed to extract report content. Available keys:', Object.keys(data));\n    // You might want to throw an error here or use a fallback\n    reportContent = `Error: Could not extract report content from OpenAI response.\\n\\nDebug Info:\\n${JSON.stringify(data, null, 2)}`;\n}\n\n// Create document title with timestamp\nconst docTitle = `${title} - ${new Date().toLocaleDateString()}`;\n\n// Add header to the report (only if we have valid content)\nlet finalReport;\nif (reportContent !== 'Report generation failed' && !reportContent.startsWith('Error:')) {\n    finalReport = `${title}\\n${'='.repeat(50)}\\n\\nGenerated: ${new Date().toLocaleString()}\\nReport Type: ${reportType}\\nExecution ID: ${executionId}\\n\\n${reportContent}\\n\\n${'='.repeat(50)}\\nGenerated by AI Assistant`;\n} else {\n    // If we failed to get content, just pass the error message\n    finalReport = reportContent;\n}\n\nreturn {\n    title: title,\n    documentTitle: docTitle,\n    reportContent: finalReport,\n    executionId: executionId,\n    timestamp: timestamp,\n    // Add debug info\n    debugInfo: {\n        originalDataKeys: Object.keys(data),\n        contentExtracted: reportContent !== 'Report generation failed'\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        140
+      ],
+      "id": "7fe28179-9b88-43a7-8467-010d7680bd17",
+      "name": "Prepare Doc Content"
+    },
+    {
+      "parameters": {
+        "folderId": "1qLVBkQErgrxshz3USrRWbg-7hxs068_E",
+        "title": "={{ $json.documentTitle }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        140
+      ],
+      "id": "8b8e4014-2f89-45e1-a3cf-c91f4989be22",
+      "name": "Create Google Doc",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "36DXiyFgXmj5IvFY",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"id\": \"{{ $('Create Google Doc').item.json.id }}\",\n  \"status\": \"success\",\n  \"message\": \"Report generated and saved to Google Docs successfully\",\n  \"data\": {\n    \"documentId\": \"{{ $json.documentId }}\",\n    \"documentUrl\": \"https://docs.google.com/document/d/{{ $json.documentId }}/edit\",\n    \"title\": \"{{ $('Prepare Doc Content').item.json.title }}\",\n    \"generatedAt\": \"{{ $('Prepare Doc Content').item.json.timestamp }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        400,
+        140
+      ],
+      "id": "927b3239-6cff-4b11-a3e9-f41d68ad6d7f",
+      "name": "Respond Success"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('Prepare Doc Content').item.json.reportContent }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        20,
+        140
+      ],
+      "id": "ec5cc15a-fd54-4659-b42a-7bde3459126b",
+      "name": "Create Google Doc1",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "36DXiyFgXmj5IvFY",
+          "name": "Google Docs account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Prepare Doc Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Task Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Report Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Report Data1": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Doc Content": {
+      "main": [
+        [
+          {
+            "node": "Create Google Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Doc": {
+      "main": [
+        [
+          {
+            "node": "Create Google Doc1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Doc1": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d9af3ca0-2bdf-49a6-b23e-c1628bc94730",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bfbae3991e82b207d766bd1deead841e63b08f4dc3f0cf4fcbedd3beec1a2a05"
+  },
+  "id": "K6PygvfNwWD4FzRc",
+  "tags": []
+}
